@@ -12,12 +12,12 @@ SIZE = 5
 HM_EPISODES = 25000
 MOVE_PENALTY = 1
 ENEMY_PENALTY = 300
-FOOD_REWARD = 25
+FOOD_REWARD = 100
 epsilon = 0.9
 EPS_DECAY = 0.9998
 SHOW_EVERY = 3000
 
-start_q_table = None # or filename
+start_q_table = None
 
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95
@@ -71,29 +71,11 @@ class Blob:
             self.move(x=0, y=-1)
 
     def move(self, x=False, y=False):
-
-        
-
-        if not x:
-            self.x += np.random.randint(-1,2) 
-        else:
-            self.x += x
-
-        if not y:
-            self.y += np.random.randint(-1,2) 
-        else:
-            self.y += y
-
         # if the blob hits the window border
-        if self.x < 0:
-            self.x = 0
-        elif self.x > SIZE-1:
-            self.x = SIZE-1
-
-        if self.y < 0:
-            self.y = 0
-        elif self.y > SIZE-1:
-            self.y = SIZE-1
+        if 0 <= self.x + x < SIZE:
+            self.x += x
+        if 0 <= self.y + y < SIZE:
+            self.y += y
 
 if start_q_table is None:
     q_table = {}
@@ -114,6 +96,8 @@ for episode in range(HM_EPISODES):
     player = Blob()
     food = Blob()
     enemy = Blob()
+
+    episode_reward = 0
 
     if episode % SHOW_EVERY == 0:
         print(f"on # {episode}, epsilon: {epsilon}")
@@ -155,7 +139,7 @@ for episode in range(HM_EPISODES):
         elif reward == -ENEMY_PENALTY:
             new_q = -ENEMY_PENALTY
         else:
-            new_q = (1 - LEARNING_RATE) * current_q * LEARNING_RATE * (reward + DISCOUNT * max_future_q)
+            new_q = (1 - LEARNING_RATE) * current_q + LEARNING_RATE * (reward + DISCOUNT * max_future_q)
         
         q_table[obs][action] = new_q
         
@@ -185,6 +169,9 @@ for episode in range(HM_EPISODES):
 
     episode_rewards.append(episode_reward)
     epsilon *= EPS_DECAY
+
+    if epsilon < 0.1:
+        epsilon = 0.1
 
 moving_avg = np.convolve(episode_rewards, np.ones((SHOW_EVERY,)) / SHOW_EVERY, mode="valid")
 
