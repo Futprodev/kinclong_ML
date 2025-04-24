@@ -5,6 +5,15 @@ from keras.optimizers import Adam
 
 
 class DQNAgent:
+    def __init__(self):
+
+        # main model
+        self.model = self.create_model()
+
+        # target model
+        self.target_model = self.create_model()
+        self.target_model.set_weights(self.model.get_weights())
+
     def create_model(self):
         model = Sequential()
         model.add(Conv2D(256, (3,3), input_shape=env.OBSERVATION_SPACE_VALULES))
@@ -22,4 +31,6 @@ class DQNAgent:
 
         model.add(Dense(env.ACTION_SPACE_SIZE, activation="linear"))
         model.compile(Loss="mse", optimizer=Adam(Lr=0.001), metrics=["accuracy"])
+
+        return model
 
