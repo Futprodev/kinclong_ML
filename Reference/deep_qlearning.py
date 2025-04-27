@@ -23,6 +23,17 @@ class ModifiedTensorBoard(TensorBoard):
     # override, save logs with our step number otherwise every.fit will start from 0 step
     def on_epoch_end(self, epoch, logs=None):
         self.update_stats(**logs)
+
+    # override, train for one batch only, no need to save anything at epoch end
+    def on_batch_end(self, batch, logs=None):
+        pass
+
+    def on_train_end(self, _):
+        pass
+
+    # Creates writer, writes custom metrics and closes writer
+    def update_stats(self, **stats):
+        self._write_logs(stats, self.step)
     
 
 class DQNAgent:
