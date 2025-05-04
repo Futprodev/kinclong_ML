@@ -10,19 +10,19 @@ import random
 
 style.use("ggplot")
 
-HM_EPISODES = 2000
+HM_EPISODES = 12000
 
-MOVE_PENALTY = 0.1
-CLEAN_PENALTY = 2 
-CLEAN_REWARD = 10
+MOVE_PENALTY = 0.5
+CLEAN_PENALTY = 8 
+CLEAN_REWARD = 15
 
-epsilon = 0.9
+epsilon = 1.0
 EPS_DECAY = 0.9998
-SHOW_EVERY = 100
+SHOW_EVERY = 1000
 
-start_q_table = None
-LEARNING_RATE = 0.1
-DISCOUNT = 0.95
+start_q_table = "qtable-1746345197.pickle"
+LEARNING_RATE = 0.05
+DISCOUNT = 0.99
 
 episode_rewards = []
 
@@ -81,7 +81,7 @@ for i in range(rows):
             gridworld[i, j] = 0
 
 total_free_tiles = np.sum(gridworld == 1)
-steps = 2 * total_free_tiles
+steps = int(6 * total_free_tiles)
 
 # Color mapping: vacuum - orange, clean tile - green, dirty tile - red
 d = {
@@ -138,15 +138,17 @@ class Tiles:
         else:
             return -MOVE_PENALTY
 
-# Initialize Q-table
 if start_q_table is None:
+    print("[INFO] Initializing new Q-table...")
     q_table = {}
     for i in range(SIZE_X):
         for j in range(SIZE_Y):
             q_table[(i, j)] = [np.random.uniform(-5, 0) for _ in range(4)]
 else:
+    print(f"[INFO] Loading Q-table from '{start_q_table}'...")
     with open(start_q_table, 'rb') as f:
         q_table = pickle.load(f)
+    print(f"[INFO] Loaded Q-table with {len(q_table)} entries.")
 
 for episode in range(HM_EPISODES):
     vac_bot = Bot()
@@ -205,7 +207,6 @@ for episode in range(HM_EPISODES):
             upscaled_env = cv2.resize(env, (SIZE_X * tile_size, SIZE_Y * tile_size), interpolation=cv2.INTER_NEAREST)
 
             cv2.imshow("Environment", upscaled_env)
-            # Optionally remove extra key checking if you don't want to interrupt
 
             if cv2.waitKey(20) & 0xFF == ord("q"):
                 cv2.destroyAllWindows()
@@ -213,7 +214,7 @@ for episode in range(HM_EPISODES):
         
 
         if np.all(tile.grid == CLEAN_N):
-            episode_reward += 2000
+            episode_reward += 0.5 * total_free_tiles * CLEAN_REWARD
             break
 
     episode_rewards.append(episode_reward)
