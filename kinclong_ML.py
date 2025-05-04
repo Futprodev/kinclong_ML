@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 import pickle
 from matplotlib import style
 import time
+import os
+import random
 
 style.use("ggplot")
 
-SIZE = 5
-HM_EPISODES = 200
+HM_EPISODES = 2000
 
 MOVE_PENALTY = 0.1
 CLEAN_PENALTY = 2 
@@ -17,18 +18,70 @@ CLEAN_REWARD = 10
 
 epsilon = 0.9
 EPS_DECAY = 0.9998
-SHOW_EVERY = 50
+SHOW_EVERY = 100
 
 start_q_table = None
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95
 
 episode_rewards = []
-steps = 200
 
 VACCUUM_N = 1
 DIRY_N = 2
 CLEAN_N = 3
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+pgm_path = os.path.join(script_dir, "maps", "room2.pgm")
+
+img = cv2.imread(pgm_path, cv2.IMREAD_GRAYSCALE)
+
+invert = cv2.bitwise_not(img)
+
+_, binary_map = cv2.threshold(invert, 250, 255, cv2.THRESH_BINARY)
+
+contours, hierarchy = cv2.findContours(binary_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+debug_img = cv2.cvtColor(binary_map, cv2.COLOR_GRAY2BGR)
+cv2.drawContours(debug_img, contours, -1, (255, 255, 255), 2)
+
+def points_in_contours(x, y, contours, hierarchy):
+    idx = 0
+    while idx >= 0:
+        if cv2.pointPolygonTest(contours[idx], (x, y), False) >= 0:
+            if hierarchy[0][idx][3] != -1:
+                return False
+            else:
+                return True
+        idx = hierarchy[0][idx][0]
+    return False
+
+def add_random_obstacle(gridworld, num_obstacles):
+    rows, cols = gridworld.shape
+    free_cells = [(i, j) for i in range(rows) for j in range(cols) if gridworld[i, j] == 1]
+
+    selected_cells = random.sample(free_cells, num_obstacles)
+    for i, j in selected_cells:
+        gridworld[i, j] = 0  # Mark as obstacle
+    return gridworld
+
+grid_size = 10
+rows = img.shape[0] // grid_size
+cols = img.shape[1] // grid_size
+
+gridworld = np.zeros((rows, cols), dtype=np.uint8)
+SIZE_Y, SIZE_X = gridworld.shape
+
+for i in range(rows):
+    for j in range(cols):
+        x = j * grid_size + grid_size // 2
+        y = i * grid_size + grid_size // 2
+        if points_in_contours(x, y, contours, hierarchy):
+            gridworld[i, j] = 1
+        else:
+            gridworld[i, j] = 0
+
+total_free_tiles = np.sum(gridworld == 1)
+steps = 2 * total_free_tiles
 
 # Color mapping: vacuum - orange, clean tile - green, dirty tile - red
 d = {
@@ -39,9 +92,12 @@ d = {
 
 # Bot class: randomized start position
 class Bot:
-    def __init__(self):
-        self.x = np.random.randint(0, SIZE)
-        self.y = np.random.randint(0, SIZE)
+    def __init__(self): 
+        while True:
+            self.x = np.random.randint(0, SIZE_X)
+            self.y = np.random.randint(0, SIZE_Y)
+            if gridworld[self.y][self.x] == 1:
+                break
     
     def __str__(self):
         return f"{self.x}, {self.y}"
@@ -57,16 +113,19 @@ class Bot:
             self.move(x=0, y=1)
 
     def move(self, x=0, y=0):  
-        if 0 <= self.x + x < SIZE:
-            self.x += x
-        if 0 <= self.y + y < SIZE:
-            self.y += y
+        new_x = self.x + x
+        new_y = self.y + y
+        if 0 <= new_x < SIZE_Y and 0 <= new_y < SIZE_X:
+            if gridworld[new_y][new_x] == 1:
+                self.x = new_x
+                self.y = new_y
+        
 
 # Tiles class: initialize grid with dirty tiles
 class Tiles:
     def __init__(self):
         # Initialize grid with DIRY_N (2) for dirty tiles
-        self.grid = np.full((SIZE, SIZE), DIRY_N, dtype=int)
+        self.grid = np.where(gridworld == 1, DIRY_N, 0)  # Set valid positions to DIRY_N
 
     def state(self, bot):
         # Use bot.y for row and bot.x for column
@@ -82,8 +141,8 @@ class Tiles:
 # Initialize Q-table
 if start_q_table is None:
     q_table = {}
-    for i in range(SIZE):
-        for j in range(SIZE):
+    for i in range(SIZE_X):
+        for j in range(SIZE_Y):
             q_table[(i, j)] = [np.random.uniform(-5, 0) for _ in range(4)]
 else:
     with open(start_q_table, 'rb') as f:
@@ -130,24 +189,31 @@ for episode in range(HM_EPISODES):
 
         if show:
             # Display the current state of the grid.
-            env = np.zeros((SIZE, SIZE, 3), dtype=np.uint8)
-            for row in range(SIZE):
-                for col in range(SIZE):
-                    env[row][col] = d[tile.grid[row][col]]
-            # Place the bot's visual in its position. Note: using y,x order.
+            env = np.zeros((SIZE_Y, SIZE_X, 3), dtype=np.uint8)
+            for row in range(SIZE_Y):
+                for col in range(SIZE_X):
+                    val = tile.grid[row][col]
+                    if gridworld[row][col] == 0:
+                        env[row][col] = (100, 100, 100)
+                    else:
+                        env[row][col] = d.get(val, (0, 0, 0))
+                    
             env[vac_bot.y][vac_bot.x] = d[VACCUUM_N]
-            img_disp = Image.fromarray(env, 'RGB')
-            img_disp = img_disp.resize((300, 300), resample=Image.NEAREST)
-            cv2.imshow("Environment", np.array(img_disp))
+            tile_size = 20  # pixels per tile (adjust for your preference)
+
+            # Resize entire map image before showing it
+            upscaled_env = cv2.resize(env, (SIZE_X * tile_size, SIZE_Y * tile_size), interpolation=cv2.INTER_NEAREST)
+
+            cv2.imshow("Environment", upscaled_env)
             # Optionally remove extra key checking if you don't want to interrupt
 
-            if cv2.waitKey(125) & 0xFF == ord("q"):
+            if cv2.waitKey(20) & 0xFF == ord("q"):
                 cv2.destroyAllWindows()
                 exit()
         
 
         if np.all(tile.grid == CLEAN_N):
-            episode_reward += 250
+            episode_reward += 2000
             break
 
     episode_rewards.append(episode_reward)
