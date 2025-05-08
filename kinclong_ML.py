@@ -12,16 +12,16 @@ style.use("ggplot")
 
 HM_EPISODES = 25000
 
-MOVE_PENALTY = 1
+MOVE_PENALTY = 0.1
 CLEAN_PENALTY = 15
-CLEAN_REWARD = 75
+CLEAN_REWARD = 150
 
 epsilon = 1.0
 EPS_DECAY = 0.9999
-SHOW_EVERY = 5000
+SHOW_EVERY = 2500
 
-start_q_table = "qtable-1746460293.pickle"
-LEARNING_RATE = 0.1
+start_q_table = "qtable-1746616756.pickle"
+LEARNING_RATE = 0.05
 DISCOUNT = 0.99
 
 episode_rewards = []
@@ -81,7 +81,7 @@ for i in range(rows):
             gridworld[i, j] = 0
 
 total_free_tiles = np.sum(gridworld == 1)
-steps = int(2 * total_free_tiles)
+steps = int(4 * total_free_tiles)
 
 # Color mapping: vacuum - orange, clean tile - green, dirty tile - red
 d = {
@@ -137,7 +137,7 @@ class Tiles:
             self.grid[bot.y][bot.x] = CLEAN_N
             return CLEAN_REWARD
         elif current_value == CLEAN_N:
-            revisit_penalty = CLEAN_PENALTY * min(self.visit_count[bot.y][bot.x], 5)  # Cap the penalty to avoid excessive negative rewards
+            revisit_penalty = CLEAN_PENALTY * min(self.visit_count[bot.y][bot.x], 8)  # Cap the penalty to avoid excessive negative rewards
             return -revisit_penalty
         else:
             return -MOVE_PENALTY
@@ -225,8 +225,8 @@ for episode in range(HM_EPISODES):
 
     episode_rewards.append(episode_reward)
     epsilon *= EPS_DECAY
-    if epsilon < 0.1:
-        epsilon = 0.1
+    if epsilon < 0.2:
+        epsilon = 0.2
 
 # Plot the moving average of rewards
 moving_avg = np.convolve(episode_rewards, np.ones((SHOW_EVERY,)) / SHOW_EVERY, mode="valid")
