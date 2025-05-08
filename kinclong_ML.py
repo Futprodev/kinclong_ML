@@ -7,10 +7,11 @@ from matplotlib import style
 import time
 import os
 import random
+import hashlib
 
 style.use("ggplot")
 
-HM_EPISODES = 50
+HM_EPISODES = 5000
 
 MOVE_PENALTY = 0.1
 CLEAN_PENALTY = 15
@@ -18,7 +19,7 @@ CLEAN_REWARD = 150
 
 epsilon = 1.0
 EPS_DECAY = 0.9999
-SHOW_EVERY = 1
+SHOW_EVERY = 1000
 
 start_q_table = None
 LEARNING_RATE = 0.05
@@ -43,6 +44,11 @@ contours, hierarchy = cv2.findContours(binary_map, cv2.RETR_TREE, cv2.CHAIN_APPR
 
 debug_img = cv2.cvtColor(binary_map, cv2.COLOR_GRAY2BGR)
 cv2.drawContours(debug_img, contours, -1, (255, 255, 255), 2)
+
+# Hash function for Q-table seeing the grid
+def hash_state(posx, posy, tile_state):
+    state_str = str((posx, posy, tile_state))
+    return hashlib.md5(state_str.encode()).hexdigest()
 
 def points_in_contours(x, y, contours, hierarchy):
     idx = 0
@@ -140,6 +146,18 @@ class Tiles:
             return -revisit_penalty
         else:
             return -MOVE_PENALTY
+    
+    def surroundings(self, bot):
+        surrounding_tiles = []
+        for dx in [-1 , 0 , 1]:
+            for dy in [-1, 0, 1]:
+                nx, ny = bot.x + dx, bot.y + dy
+                if 0 <= nx < self.grid.shape[1] and 0 <= ny < self.grid.shape[0]:
+                    surrounding_tiles.append(self.grid[ny][nx])
+                else:
+                    surrounding_tiles.append(-1) #invalid space (out of bounds)
+        return tuple(surrounding_tiles)
+
 
 if start_q_table is None:
     print("[INFO] Initializing new Q-table...")
@@ -170,8 +188,15 @@ for episode in range(HM_EPISODES):
     else:
         show = False
     
+    # Make an observation on the bot and the surrounding tiles
     for step in range(steps):
-        obs = (vac_bot.x, vac_bot.y)
+        # this hash will be filled once the bot actually starts
+        obs = hash_state(vac_bot.x, vac_bot.y, tile.surroundings(vac_bot))
+        
+        # we need to create a initial value for the start
+        if obs not in q_table:
+            q_table[obs] = [np.random.uniform(-5, 0) for _ in range(4)]
+
         if np.random.random() > epsilon:
             action = np.argmax(q_table[obs])
         else:
@@ -179,7 +204,10 @@ for episode in range(HM_EPISODES):
 
         vac_bot.action(action)
         reward = tile.state(vac_bot)
-        new_obs = (vac_bot.x, vac_bot.y)
+        new_obs = hash_state(vac_bot.x, vac_bot.y, tile.surroundings(vac_bot))
+
+        if new_obs not in q_table:
+            q_table[new_obs] = [np.random.uniform(-5, 0) for _ in range(4)]
 
         max_future_q = np.max(q_table[new_obs])
         current_q = q_table[obs][action]
@@ -207,6 +235,16 @@ for episode in range(HM_EPISODES):
 
             # Resize entire map image before showing it
             upscaled_env = cv2.resize(env, (SIZE_X * tile_size, SIZE_Y * tile_size), interpolation=cv2.INTER_NEAREST)
+
+            # create an outline of what the robot sees
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    nx, ny = vac_bot.x + dx, vac_bot.y +dy
+                    if 0 <= nx < SIZE_X and 0 <= ny < SIZE_Y:
+                        cv2.rectangle(upscaled_env, 
+                                      (nx * tile_size, ny * tile_size),
+                                      ((nx + 1) * tile_size, (ny + 1) * tile_size),
+                                      (255, 255, 255), 2)
 
             cv2.imshow("Environment", upscaled_env)
 
