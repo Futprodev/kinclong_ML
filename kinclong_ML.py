@@ -10,7 +10,7 @@ import random
 
 style.use("ggplot")
 
-HM_EPISODES = 25000
+HM_EPISODES = 50
 
 MOVE_PENALTY = 0.1
 CLEAN_PENALTY = 15
@@ -18,9 +18,9 @@ CLEAN_REWARD = 150
 
 epsilon = 1.0
 EPS_DECAY = 0.9999
-SHOW_EVERY = 2500
+SHOW_EVERY = 1
 
-start_q_table = "qtable-1746616756.pickle"
+start_q_table = None
 LEARNING_RATE = 0.05
 DISCOUNT = 0.99
 
@@ -119,7 +119,6 @@ class Bot:
             if gridworld[new_y][new_x] == 1:
                 self.x = new_x
                 self.y = new_y
-        
 
 # Tiles class: initialize grid with dirty tiles
 class Tiles:
@@ -137,7 +136,7 @@ class Tiles:
             self.grid[bot.y][bot.x] = CLEAN_N
             return CLEAN_REWARD
         elif current_value == CLEAN_N:
-            revisit_penalty = CLEAN_PENALTY * min(self.visit_count[bot.y][bot.x], 8)  # Cap the penalty to avoid excessive negative rewards
+            revisit_penalty = CLEAN_PENALTY * (1.5 ** self.visit_count[bot.y][bot.x])  # Cap the penalty to avoid excessive negative rewards
             return -revisit_penalty
         else:
             return -MOVE_PENALTY
@@ -185,10 +184,7 @@ for episode in range(HM_EPISODES):
         max_future_q = np.max(q_table[new_obs])
         current_q = q_table[obs][action]
 
-        if reward == CLEAN_REWARD:
-            new_q = reward
-        else:
-            new_q = (1 - LEARNING_RATE) * current_q + LEARNING_RATE * (reward + DISCOUNT * max_future_q)
+        new_q = (1 - LEARNING_RATE) * current_q + LEARNING_RATE * (reward + DISCOUNT * max_future_q)
 
         q_table[obs][action] = new_q
         episode_reward += reward
