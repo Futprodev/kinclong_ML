@@ -11,17 +11,17 @@ import hashlib
 
 style.use("ggplot")
 
-HM_EPISODES = 5000
+HM_EPISODES = 25000
 
 MOVE_PENALTY = 0.1
-CLEAN_PENALTY = 15
-CLEAN_REWARD = 150
+CLEAN_PENALTY = 3
+CLEAN_REWARD = 30
 
 epsilon = 1.0
 EPS_DECAY = 0.9999
-SHOW_EVERY = 1000
+SHOW_EVERY = 2500
 
-start_q_table = None
+start_q_table = "qtable-1746708410.pickle"
 LEARNING_RATE = 0.05
 DISCOUNT = 0.99
 
@@ -31,6 +31,7 @@ VACCUUM_N = 1
 DIRY_N = 2
 CLEAN_N = 3
 
+# pgm map conversion to use in opencv
 script_dir = os.path.dirname(os.path.abspath(__file__))
 pgm_path = os.path.join(script_dir, "maps", "room2.pgm")
 
@@ -142,7 +143,7 @@ class Tiles:
             self.grid[bot.y][bot.x] = CLEAN_N
             return CLEAN_REWARD
         elif current_value == CLEAN_N:
-            revisit_penalty = CLEAN_PENALTY * (1.5 ** self.visit_count[bot.y][bot.x])  # Cap the penalty to avoid excessive negative rewards
+            revisit_penalty = CLEAN_PENALTY * min(self.visit_count[bot.y][bot.x], 3)  # Cap the penalty to avoid excessive negative rewards
             return -revisit_penalty
         else:
             return -MOVE_PENALTY
@@ -225,7 +226,7 @@ for episode in range(HM_EPISODES):
                     val = tile.grid[row][col]
                     if gridworld[row][col] == 0:
                         env[row][col] = (100, 100, 100)
-                    elif tile.visit_count[row][col] > 5:
+                    elif tile.visit_count[row][col] > 3:
                         env[row][col] = (30, 30, 30)
                     else:
                         env[row][col] = d.get(val, (0, 0, 0))
