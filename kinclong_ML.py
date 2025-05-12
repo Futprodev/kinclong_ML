@@ -90,6 +90,33 @@ for i in range(rows):
 total_free_tiles = np.sum(gridworld == 1)
 steps = int(4 * total_free_tiles)
 
+def reward_for_lines(tile_grid, clean_value=3, base_reward=30):
+    bonus = 0
+    rows, cols = tile_grid.shape
+
+    # Check full horizontal lines
+    for i in range(rows):
+        if all(tile_grid[i, j] == clean_value for j in range(cols)):
+            bonus += base_reward * cols
+
+    # Check full vertical lines
+    for j in range(cols):
+        if all(tile_grid[i, j] == clean_value for i in range(rows)):
+            bonus += base_reward * rows
+
+    return bonus
+
+def reward_for_quadrants(tile_grid, clean_value=3, base_reward=30):
+    bonus = 0
+    rows, cols = tile_grid.shape
+    total_clean = (tile_grid == clean_value).sum()
+
+    quarter_tiles = (rows * cols) // 4
+    completed_quarters = total_clean // quarter_tiles
+    bonus += completed_quarters * base_reward * 5
+
+    return bonus
+
 # Color mapping: vacuum - orange, clean tile - green, dirty tile - red
 d = {
     VACCUUM_N: (255, 175, 0),
@@ -257,6 +284,9 @@ for episode in range(HM_EPISODES):
         if np.all(tile.grid == CLEAN_N):
             episode_reward += 0.5 * total_free_tiles * CLEAN_REWARD
             break
+
+    episode_reward += reward_for_lines(tile.grid)
+    episode_reward += reward_for_quadrants(tile.grid)
 
     episode_rewards.append(episode_reward)
     epsilon *= EPS_DECAY
