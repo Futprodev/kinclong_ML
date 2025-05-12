@@ -111,6 +111,17 @@ class PGMroom:
         self.gridsize = GRID_SIZE
         self.grid_world = None
 
+    def find_contours(x, y, countours, hierarchy):
+        idx = 0
+        while idx >=0:
+            if cv2.pointPolygonTest(contours[idx], (x,y), False) >= 0:
+                if hierarchy[0][idx][3] != -1:
+                    return False
+                else:
+                    return True
+            idx = hierarchy[0][idx][0]
+        return False
+
     def generate_world(self):
         pgm_path = self.pgm_path
 
@@ -132,7 +143,16 @@ class PGMroom:
         gridworld = np.zeros((rows, cols), dtype=np.uint8)
         SIZE_Y, SIZE_X = gridworld.shape
 
-
+        for i in range(rows):
+            for j in range(cols):
+                x = j * grid_size + grid_size // 2
+                y = i * grid_size + grid_size // 2
+                if points_in_contours(x, y, contours, hierarchy):
+                    gridworld[i, j] = 1
+                else:
+                    gridworld[i, j] = 0
+        
+        
 
 # Skibidi the bot
 class Bot:
