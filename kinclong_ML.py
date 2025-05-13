@@ -11,7 +11,7 @@ import hashlib
 
 style.use("ggplot")
 
-HM_EPISODES = 25000
+HM_EPISODES = 15000
 
 MOVE_PENALTY = 0.1
 CLEAN_PENALTY = 3
@@ -19,9 +19,9 @@ CLEAN_REWARD = 30
 
 epsilon = 1.0
 EPS_DECAY = 0.9999
-SHOW_EVERY = 2500
+SHOW_EVERY = 1500
 
-start_q_table = "qtable-1746708410.pickle"
+start_q_table = None
 LEARNING_RATE = 0.05
 DISCOUNT = 0.99
 
@@ -93,29 +93,37 @@ steps = int(4 * total_free_tiles)
 def reward_for_lines(tile_grid, clean_value=3, base_reward=30):
     bonus = 0
     rows, cols = tile_grid.shape
+    longest_row = 0
+    longest_col = 0
+    full_rows = []
+    full_cols = []
 
-    # Check full horizontal lines
     for i in range(rows):
         if all(tile_grid[i, j] == clean_value for j in range(cols)):
             bonus += base_reward * cols
+            full_rows.append(i)
+        else:
+            streak = sum(1 for j in range(cols) if tile_grid[i, j] == clean_value)
+            longest_row = max(longest_row, streak)
 
-    # Check full vertical lines
     for j in range(cols):
         if all(tile_grid[i, j] == clean_value for i in range(rows)):
             bonus += base_reward * rows
+            full_cols.append(j)
+        else:
+            streak = sum(1 for i in range(rows) if tile_grid[i, j] == clean_value)
+            longest_col = max(longest_col, streak)
 
-    return bonus
+    return bonus, longest_row, longest_col, full_rows, full_cols
 
 def reward_for_quadrants(tile_grid, clean_value=3, base_reward=30):
-    bonus = 0
     rows, cols = tile_grid.shape
     total_clean = (tile_grid == clean_value).sum()
-
     quarter_tiles = (rows * cols) // 4
     completed_quarters = total_clean // quarter_tiles
-    bonus += completed_quarters * base_reward * 5
+    bonus = completed_quarters * base_reward * 5
+    return bonus, completed_quarters
 
-    return bonus
 
 # Color mapping: vacuum - orange, clean tile - green, dirty tile - red
 d = {
@@ -212,6 +220,19 @@ for episode in range(HM_EPISODES):
             avg_reward = np.mean(episode_rewards) if episode_rewards else 0
         print(f"on # {episode}, epsilon: {epsilon:.4f}")
         print(f"Last {SHOW_EVERY} episodes mean reward: {avg_reward}")
+
+        lines_bonus, longest_row, longest_col, full_rows, full_cols = reward_for_lines(tile.grid)
+        quad_bonus, completed_quarters = reward_for_quadrants(tile.grid)
+
+        print("\n[FINAL REPORT]")
+        print(f"[INFO] Longest cleaned row streak: {longest_row}")
+        print(f"[INFO] Longest cleaned column streak: {longest_col}")
+        print(f"[INFO] Fully cleaned row indices: {full_rows}")
+        print(f"[INFO] Fully cleaned column indices: {full_cols}")
+        print(f"[INFO] Completed {completed_quarters} quarter(s) of the map")
+        print(f"[INFO] Total line bonus: {lines_bonus}")
+        print(f"[INFO] Total quadrant bonus: {quad_bonus}")
+        
         show = True    
     else:
         show = False
