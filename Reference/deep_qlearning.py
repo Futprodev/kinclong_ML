@@ -13,7 +13,7 @@ import os
 from PIL import Image
 import cv2
 
-LOAD_MODEL = "models\\test1.model"
+LOAD_MODEL = None
 
 REPLAY_MEMORY_SIZE = 50_000
 MIN_REPLAY_MEMORY_SIZE = 1_000
@@ -233,27 +233,6 @@ class DQNAgent:
         self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
         self.tensorboard = ModifiedTensorBoard(log_dir=f"logs/{MODEL_NAME}-{int(time.time())}")
         self.target_update_counter = 0
-
-    def create_model(self):
-        model = Sequential()
-        model.add(Conv2D(256, (3,3), input_shape=env.OBSERVATION_SPACE_VALUES))
-        model.add(Activation("relu"))
-        model.add(MaxPooling2D(2,2))
-        model.add(Dropout(0.2))
-
-        model.add(Conv2D(256, (3,3)))
-        model.add(Activation("relu"))
-        model.add(MaxPooling2D(2,2))
-        model.add(Dropout(0.2))
-
-        model.add(Flatten())
-        model.add(Dense(64))
-
-        model.add(Dense(env.ACTION_SPACE_SIZE, activation="linear"))
-        model.compile(loss="mse", optimizer=Adam(learning_rate=0.001), metrics=["accuracy"])
-
-
-        return model
     
     def update_replay_memory(self, transition):
         self.replay_memory.append(transition)

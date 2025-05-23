@@ -11,15 +11,20 @@ import hashlib
 
 style.use("ggplot")
 
-HM_EPISODES = 15000
+HM_EPISODES = 16000
 
 MOVE_PENALTY = 0.1
 CLEAN_PENALTY = 3
 CLEAN_REWARD = 30
 
 epsilon = 1.0
+EPSILON_RESET_INTERVAL = 4000
+epsilon_reset_trigger = EPSILON_RESET_INTERVAL
+MAX_EPSILON = 1.0
+MIN_EPSILON = 0.2
+STEP_SCALE = 1.2
 EPS_DECAY = 0.9999
-SHOW_EVERY = 1500
+SHOW_EVERY = 2000
 
 start_q_table = None
 LEARNING_RATE = 0.05
@@ -220,22 +225,15 @@ for episode in range(HM_EPISODES):
             avg_reward = np.mean(episode_rewards) if episode_rewards else 0
         print(f"on # {episode}, epsilon: {epsilon:.4f}")
         print(f"Last {SHOW_EVERY} episodes mean reward: {avg_reward}")
-
-        lines_bonus, longest_row, longest_col, full_rows, full_cols = reward_for_lines(tile.grid)
-        quad_bonus, completed_quarters = reward_for_quadrants(tile.grid)
-
-        print("\n[FINAL REPORT]")
-        print(f"[INFO] Longest cleaned row streak: {longest_row}")
-        print(f"[INFO] Longest cleaned column streak: {longest_col}")
-        print(f"[INFO] Fully cleaned row indices: {full_rows}")
-        print(f"[INFO] Fully cleaned column indices: {full_cols}")
-        print(f"[INFO] Completed {completed_quarters} quarter(s) of the map")
-        print(f"[INFO] Total line bonus: {lines_bonus}")
-        print(f"[INFO] Total quadrant bonus: {quad_bonus}")
         
         show = True    
     else:
         show = False
+    
+    if episode != 0 and episode % epsilon_reset_trigger == 0:
+        epsilon = min(epsilon + 0.3, MAX_EPSILON)
+        steps = int(steps * STEP_SCALE)
+        print(f"[SCHEDULER] Epsilon reset to {epsilon:.2f}, Steps increased to {steps}")
     
     # Make an observation on the bot and the surrounding tiles
     for step in range(steps):
@@ -306,13 +304,16 @@ for episode in range(HM_EPISODES):
             episode_reward += 0.5 * total_free_tiles * CLEAN_REWARD
             break
 
-    episode_reward += reward_for_lines(tile.grid)
-    episode_reward += reward_for_quadrants(tile.grid)
+    lines_bonus, longest_row, longest_col, full_rows, full_cols = reward_for_lines(tile.grid)
+    quad_bonus, completed_quarters = reward_for_quadrants(tile.grid)
+
+    episode_reward += lines_bonus
+    episode_reward += quad_bonus
 
     episode_rewards.append(episode_reward)
     epsilon *= EPS_DECAY
     if epsilon < 0.2:
-        epsilon = 0.2
+        epsilon = 1.0
 
 # Plot the moving average of rewards
 moving_avg = np.convolve(episode_rewards, np.ones((SHOW_EVERY,)) / SHOW_EVERY, mode="valid")
@@ -320,6 +321,15 @@ plt.plot(list(range(len(moving_avg))), moving_avg)
 plt.ylabel(f"Reward ({SHOW_EVERY} episodes avg)")
 plt.xlabel("Episode #")
 plt.show()
+
+print("\n[FINAL REPORT]")
+print(f"[INFO] Longest cleaned row streak: {longest_row}")
+print(f"[INFO] Longest cleaned column streak: {longest_col}")
+print(f"[INFO] Fully cleaned row indices: {full_rows}")
+print(f"[INFO] Fully cleaned column indices: {full_cols}")
+print(f"[INFO] Completed {completed_quarters} quarter(s) of the map")
+print(f"[INFO] Total line bonus: {lines_bonus}")
+print(f"[INFO] Total quadrant bonus: {quad_bonus}")
 
 # Save the Q-table
 with open(f"qtable-{int(time.time())}.pickle", "wb") as f:
