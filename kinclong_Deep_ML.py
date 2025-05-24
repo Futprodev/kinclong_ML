@@ -37,121 +37,96 @@ MIN_EPSILON = 0.001
 AGGREGATE_STATS_EVERY = 50  # episodes
 SHOW_PREVIEW = False
 
-# pgm map conversion to use in opencv
-script_dir = os.path.dirname(os.path.abspath(__file__))
-pgm_path = os.path.join(script_dir, "maps", "room2.pgm")
-
-# Map Setup
-img = cv2.imread(pgm_path, cv2.IMREAD_GRAYSCALE)
-
-invert = cv2.bitwise_not(img)
-
-_, binary_map = cv2.threshold(invert, 250, 255, cv2.THRESH_BINARY)
-
-contours, hierarchy = cv2.findContours(binary_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-debug_img = cv2.cvtColor(binary_map, cv2.COLOR_GRAY2BGR)
-cv2.drawContours(debug_img, contours, -1, (255, 255, 255), 2)
-
-def points_in_contours(x, y, contours, hierarchy):
-    idx = 0
-    while idx >= 0:
-        if cv2.pointPolygonTest(contours[idx], (x, y), False) >= 0:
-            if hierarchy[0][idx][3] != -1:
-                return False
-            else:
-                return True
-        idx = hierarchy[0][idx][0]
-    return False
-
-def add_random_obstacle(gridworld, num_obstacles):
-    rows, cols = gridworld.shape
-    free_cells = [(i, j) for i in range(rows) for j in range(cols) if gridworld[i, j] == 1]
-
-    selected_cells = random.sample(free_cells, num_obstacles)
-    for i, j in selected_cells:
-        gridworld[i, j] = 0  # Mark as obstacle
-    return gridworld
-
-grid_size = 10
-rows = img.shape[0] // grid_size
-cols = img.shape[1] // grid_size
-
-gridworld = np.zeros((rows, cols), dtype=np.uint8)
-SIZE_Y, SIZE_X = gridworld.shape
-
-for i in range(rows):
-    for j in range(cols):
-        x = j * grid_size + grid_size // 2
-        y = i * grid_size + grid_size // 2
-        if points_in_contours(x, y, contours, hierarchy):
-            gridworld[i, j] = 1
-        else:
-            gridworld[i, j] = 0
-
-total_free_tiles = np.sum(gridworld == 1)
-steps = int(4 * total_free_tiles)
-
 # Bot class: randomized start position
 class Bot:
-    def __init__(self): 
+    def __init__(self, size_x, size_y, grid_pos): 
         while True:
-            self.x = np.random.randint(0, SIZE_X)
-            self.y = np.random.randint(0, SIZE_Y)
-            if gridworld[self.y][self.x] == 1:
+            self.x = np.random.randint(0, size_x)
+            self.y = np.random.randint(0, size_y)
+            if grid_pos[self.y][self.x] == 1:
                 break
     
     def __str__(self):
         return f"{self.x}, {self.y}"
     
-    def action(self, choice):
+    def action(self, choice, grid_pos, size_x, size_y):
         if choice == 0:
-            self.move(x=1, y=0)
+            self.move(size_x, size_y,grid_pos, x=1, y=0)
         elif choice == 1:
-            self.move(x=-1, y=0)
+            self.move(size_x, size_y,grid_pos,x=-1, y=0)
         elif choice == 2:
-            self.move(x=0, y=-1)
+            self.move(size_x, size_y,grid_pos,x=0, y=-1)
         elif choice == 3:
-            self.move(x=0, y=1)
+            self.move(size_x, size_y,grid_pos,x=0, y=1)
 
-    def move(self, x=0, y=0):  
+    def move(self, size_x, size_y, grid_pos, x=0, y=0):  
         new_x = self.x + x
         new_y = self.y + y
-        if 0 <= new_x < SIZE_Y and 0 <= new_y < SIZE_X:
-            if gridworld[new_y][new_x] == 1:
+        if 0 <= new_x < size_x and 0 <= new_y < size_y:
+            if grid_pos[new_y][new_x] == 1:
                 self.x = new_x
                 self.y = new_y
-
-class Tiles:
-    def __init__(self):
-        # Initialize grid with DIRY_N (2) for dirty tiles
-        self.grid = np.where(gridworld == 1, DIRY_N, 0)  # Set valid positions to DIRY_N
-        self.visit_count = np.zeros_like(self.grid, dtype=int)  # Initialize visit count for each tile
-
-    def state(self, bot):
-        self.visit_count[bot.y][bot.x] += 1  # Increment visit count for the current tilr
-        
-        # Use bot.y for row and bot.x for column
-        current_value = self.grid[bot.y][bot.x]
-        if current_value == DIRY_N:
-            self.grid[bot.y][bot.x] = CLEAN_N
-            return CLEAN_REWARD
-        elif current_value == CLEAN_N:
-            revisit_penalty = CLEAN_PENALTY * min(self.visit_count[bot.y][bot.x], 3)  # Cap the penalty to avoid excessive negative rewards
-            return -revisit_penalty
-        else:
-            return -MOVE_PENALTY
         
 class RoomEnv:
+
+    # pgm map conversion to use in opencv
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    pgm_path = os.path.join(script_dir, "maps", "room2.pgm")
+
+    # Map Setup
+    img = cv2.imread(pgm_path, cv2.IMREAD_GRAYSCALE)
+
+    invert = cv2.bitwise_not(img)
+
+    _, binary_map = cv2.threshold(invert, 250, 255, cv2.THRESH_BINARY)
+
+    contours, hierarchy = cv2.findContours(binary_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    debug_img = cv2.cvtColor(binary_map, cv2.COLOR_GRAY2BGR)
+    cv2.drawContours(debug_img, contours, -1, (255, 255, 255), 2)
+
+    def points_in_contours(x, y, contours, hierarchy):
+        idx = 0
+        while idx >= 0:
+            if cv2.pointPolygonTest(contours[idx], (x, y), False) >= 0:
+                if hierarchy[0][idx][3] != -1:
+                    return False
+                else:
+                    return True
+            idx = hierarchy[0][idx][0]
+        return False
+
+    grid_size = 10
+    rows = img.shape[0] // grid_size
+    cols = img.shape[1] // grid_size
+
+    gridworld = np.zeros((rows, cols), dtype=np.uint8)
+    SIZE_Y, SIZE_X = gridworld.shape
+
+    for i in range(rows):
+        for j in range(cols):
+            x = j * grid_size + grid_size // 2
+            y = i * grid_size + grid_size // 2
+            if points_in_contours(x, y, contours, hierarchy):
+                gridworld[i, j] = 1
+            else:
+                gridworld[i, j] = 0
+
+    total_free_tiles = np.sum(gridworld == 1)
+
     RETURN_IMAGES = True
     MOVE_PENALTY = 0.1
     CLEAN_PENALTY = 30
     CLEAN_REWARD = 10
+    OBSERVATION_SPACE_VALUES = (SIZE_X, SIZE_Y, 3)
     ACTION_SPACE_SIZE = 4
 
-    VAC_BOT_N = 1
+    VACUUM_N = 1
     CLEAN_N = 2
-    DIRTY_n = 3
+    DIRTY_N = 3
+
+    grid = np.where(gridworld == 1, DIRTY_N, 0)
+    visit_count = np.zeros_like(grid, dtype=int)
 
     d = {
         1: (255, 175, 0),
@@ -159,10 +134,75 @@ class RoomEnv:
         3: (0, 0, 255)
     }
 
-    def reset(self):
-        self.
-        
+    def tileState(self, bot):
+        self.visit_count[bot.y][bot.x] += 1
 
+        current_value = self.grid[bot.y][bot.x]
+        if current_value == self.DIRTY_N:
+            self.grid[bot.y][bot.x] = self.CLEAN_N
+            return self.CLEAN_REWARD
+        
+        elif current_value == self.CLEAN_N:
+            revisit_penalty = self.CLEAN_PENALTY * min(self.visit_count[bot.y][bot.x], 3)
+            return - revisit_penalty
+        
+        else:
+            return - self.MOVE_PENALTY
+
+    def reset(self):
+        self.vac_bot = Bot(self.SIZE_X, self.SIZE_Y, self.gridworld)
+        
+        self.episode_step = 0
+
+        if self.RETURN_IMAGES:
+            obs = np.array(self.get_image())
+        else:
+            obs = (self.vac_bot)
+        return obs
+    
+    def step(self, action):
+        self.episode_step += 1
+        self.vac_bot.action(action, self.gridworld, self.SIZE_X, self.SIZE_Y)
+
+        if self.RETURN_IMAGES:
+            new_obs = np.array(self.get_image())
+        else:
+            new_obs = (self.vac_bot)
+
+        reward = self.tileState(self.vac_bot)
+
+        done = False
+        if np.all(self.grid == self.CLEAN_N):
+            done = True
+        
+        return new_obs, reward, done
+
+        
+    def render(self):
+        img = self.get_image()
+        img = img.resize((300, 300))
+        cv2.imshow("image", np.array(img))
+        cv2.waitKey(1)
+
+    def get_image(self):
+        env = np.zeros((self.SIZE_Y, self.SIZE_X,3), dtype=np.uint8)
+        for row in range(self.SIZE_Y):
+            for col in range(self.SIZE_X):
+                current_pos = self.grid[row][col]
+                if self.gridworld[row][col] == 0:
+                    env[row][col] = (100, 100, 100)
+                elif self.visit_count[row][col]:
+                    env[row][col] = (30, 30, 30)
+                else:   
+                    env[row][col] = self.d.get(current_pos, (0, 0, 0))
+        
+        env[self.vac_bot.y][self.vac_bot.x] = self.d[self.VACUUM_N]
+
+        img = Image.fromarray(env, 'RGB')
+        return img
+    
+        
+env = RoomEnv()
 
 # For stats
 ep_rewards = [-200]
@@ -172,7 +212,7 @@ random.seed(1)
 np.random.seed(1)
 tf.random.set_seed(1)
 
-# Memory fraction, used mostly when trai8ning multiple agents
+# Memory fraction, used mostly when training multiple agents
 #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=MEMORY_FRACTION)
 #backend.set_session(tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)))
 
